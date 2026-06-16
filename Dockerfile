@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM node:24.4.0-slim AS base
+FROM node:22-slim AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable
@@ -24,6 +24,14 @@ RUN pnpm --filter=./apps/dokploy --prod deploy --legacy /prod/dokploy
 
 RUN cp -R /usr/src/app/apps/dokploy/.next /prod/dokploy/.next
 RUN cp -R /usr/src/app/apps/dokploy/dist /prod/dokploy/dist
+
+# Workaround for a Next.js 16 runtime bug: setupFsCheck calls
+# customRoutes.onMatchHeaders.map(...) without a fallback. The field is only
+# written to routes-manifest.json when the project actually defines
+# onMatchHeaders rules, so a manifest without it crashes prepare(). Ensure
+# the field is always present (empty array if missing). Remove when Next.js
+# defaults it server-side.
+RUN node -e "const fs=require('fs'),p='/prod/dokploy/.next/routes-manifest.json';const m=JSON.parse(fs.readFileSync(p,'utf8'));if(!m.onMatchHeaders)m.onMatchHeaders=[];fs.writeFileSync(p,JSON.stringify(m))"
 
 FROM base AS dokploy
 WORKDIR /app
